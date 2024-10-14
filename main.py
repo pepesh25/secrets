@@ -1,3 +1,4 @@
+import json
 import random
 import string
 import uuid
@@ -9,6 +10,7 @@ import redis
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from dotenv import load_dotenv
 from flask import Flask, request, jsonify, abort, render_template
 
@@ -25,6 +27,33 @@ r = redis.Redis(
 def generate_random_password(length=16):
     chars = string.ascii_letters + string.digits + "!@#$%^&*()"
     return ''.join(random.choice(chars) for _ in range(length))
+
+
+def decrypt_symmetric_key(private_key, encrypted_symmetric_key):
+    encrypted_key_bytes = b64decode(encrypted_symmetric_key)
+    symmetric_key = private_key.decrypt(
+        encrypted_key_bytes,
+        padding.OAEP(
+            mgf=padding.MGF1(algorithm=hashes.SHA256()),
+            algorithm=hashes.SHA256(),
+            label=None
+        )
+    )
+
+    return symmetric_key
+
+
+def decrypt_content(content, iv, symmetric_key):
+    encrypted_content = b64decode(content)
+
+    tag = encrypted_content[-16:]
+    encrypted_content = encrypted_content[:-16]
+
+    cipher = Cipher(algorithms.AES(symmetric_key), modes.GCM(iv, tag))
+    decryptor = cipher.decryptor()
+
+    decrypted_content = decryptor.update(encrypted_content) + decryptor.finalize()
+    return decrypted_content.decode('utf-8')
 
 
 @app.route('/')
@@ -68,7 +97,9 @@ def generate_keys():
 @app.route('/save_record', methods=['POST'])
 def save_record():
     data = request.json
-    encrypted_text = data['encrypted_text']
+    encrypted_symmetric_key = data['encrypted_symmetric_key']
+    iv = data['iv']
+    encrypted_text = data['encrypted_content']
     public_key_id = data['key_id']
     expiry_option = data['expiry_option']
 
@@ -85,7 +116,8 @@ def save_record():
     record_id = str(uuid.uuid4())
     password = generate_random_password()
 
-    r.setex(f"record:{record_id}", expiry, encrypted_text)
+    r.setex(f"record:{record_id}", expiry, json.dumps({"iv": iv, "content": encrypted_text}))
+    r.setex(f"symmetric_key:{record_id}", expiry, encrypted_symmetric_key)
     r.setex(f"password:{record_id}", expiry, password)
     r.setex(f"record_private_key:{record_id}", expiry, public_key_id)
 
@@ -113,8 +145,8 @@ def get_decrypted_record():
     if not saved_password or saved_password.decode('utf-8') != password:
         return jsonify({"error": "Invalid password"}), 403
 
-    encrypted_text = r.get(f"record:{record_id}")
-    if not encrypted_text:
+    content = r.get(f"record:{record_id}")
+    if not content:
         abort(404)
 
     key_id = r.get(f"record_private_key:{record_id}")
@@ -131,8 +163,9 @@ def get_decrypted_record():
         backend=default_backend()
     )
 
-    decrypted_text = private_key.decrypt(
-        b64decode(encrypted_text),
+    symmetric_key = r.get(f"symmetric_key:{record_id}")
+    decrypted_symmetric_key = private_key.decrypt(
+        b64decode(symmetric_key),
         padding.OAEP(
             mgf=padding.MGF1(algorithm=hashes.SHA256()),
             algorithm=hashes.SHA256(),
@@ -140,8 +173,11 @@ def get_decrypted_record():
         )
     )
 
+    content_json = json.loads(content)
+    decrypted_text = decrypt_content(content_json.get("content"), b64decode(content_json.get("iv")), decrypted_symmetric_key)
+
     return jsonify({
-        "decrypted_text": decrypted_text.decode('utf-8'),
+        "decrypted_text": decrypted_text,
         "ttl": r.ttl(f"record:{record_id}")
     })
 
