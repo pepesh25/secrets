@@ -147,4 +147,4 @@ def get_decrypted_record():
 
 
 if __name__ == '__main__':
-    app.run(debug=getenv('APP_ENV', 'dev') != 'prod', port=int(getenv('APP_PORT', '8080')))
+    app.run(host="0.0.0.0", debug=getenv('APP_ENV', 'dev') != 'prod', port=int(getenv('APP_PORT', '8080')))
