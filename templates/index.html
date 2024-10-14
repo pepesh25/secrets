@@ -116,7 +116,7 @@
         const {record_id, password} = await saveResponse.json();
 
         document.getElementById('resultSection').classList.remove('hidden');
-        document.getElementById('result').value = `Record ID: http://localhost:8080/${record_id}\nPassword: ${password}`;
+        document.getElementById('result').value = `Record ID: https://secrets.mznx.dev/${record_id}\nPassword: ${password}`;
     });
 
     document.getElementById('createNewBtn').addEventListener('click', () => {
