@@ -6,23 +6,18 @@ from base64 import b64decode
 from datetime import timedelta
 from os import getenv
 
-import redis
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from dotenv import load_dotenv
 from flask import Flask, request, jsonify, abort, render_template
+from redis import from_url
 
 load_dotenv()
 
 app = Flask(__name__)
-r = redis.Redis(
-    host=getenv('REDIS_HOST', 'localhost'),
-    port=int(getenv('REDIS_PORT', '6379')),
-    db=int(getenv('REDIS_DB', '0'))
-)
-
+r = from_url(getenv('REDIS_URL', 'redis://localhost:6379/0'))
 
 def generate_random_password(length=16):
     chars = string.ascii_letters + string.digits + "!@#$%^&*()"
