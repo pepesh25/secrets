@@ -1,0 +1,6 @@
+services:
+  redis:
+    image: redis:latest
+    container_name: secrets_redis
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
