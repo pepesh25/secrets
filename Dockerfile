@@ -20,6 +20,7 @@ WORKDIR /app
 
 COPY main.py poetry.lock pyproject.toml ./
 COPY templates ./templates
+COPY README.md ./README.md
 RUN poetry install
 
 CMD ["python", "main.py"]
