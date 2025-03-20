@@ -13,8 +13,6 @@ services:
       - REDIS_URL=redis://secrets_redis:6379
     depends_on:
       - redis
-    ports:
-      - "${SECRETS_PORT:-8080}:8080"
 
   caddy:
     image: caddy:2.9.1
